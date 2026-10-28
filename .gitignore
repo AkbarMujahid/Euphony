@@ -1,0 +1,18 @@
+# Gradle / Kotlin
+.gradle/
+.kotlin/
+build/
+*/build/
+
+# Machine-specific
+local.properties
+.idea/
+*.iml
+captures/
+.DS_Store
+
+# Build outputs and signing keys (APKs are attached to GitHub releases instead)
+*.apk
+*.aab
+*.jks
+*.keystore
