@@ -113,3 +113,7 @@ app/src/main/java/com/euphony/player/
 app/src/test/                Unit tests (folder scan, grouping, playlists, EQ math, format labels)
 docs/                        Logo and screenshots
 ```
+
+## License
+
+Euphony is released under the [MIT License](LICENSE): you are free to use, copy, modify and share it, as long as the copyright notice is kept.
