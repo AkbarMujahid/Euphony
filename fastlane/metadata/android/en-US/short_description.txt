@@ -1,0 +1,1 @@
+Minimal, ad-free music player for FLAC and hi-res audio from your own folder

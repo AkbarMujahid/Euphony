@@ -1,19 +1,39 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+// Signing settings live in the git-ignored local.properties. With none set, as on F-Droid's build
+// server, the release APK stays unsigned so the store can sign it.
+val localProperties = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+}
+val releaseKeystore: String? = localProperties.getProperty("signing.storeFile")
 
 android {
     namespace = "com.euphony.player"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.euphony.player"
+        applicationId = "io.github.akbarmujahid.euphony"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.0.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = localProperties.getProperty("signing.storePassword")
+                keyAlias = localProperties.getProperty("signing.keyAlias")
+                keyPassword = localProperties.getProperty("signing.keyPassword")
+            }
+        }
     }
 
     buildTypes {
@@ -21,8 +41,12 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Signed with the local debug key so the APK installs straight onto a phone.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = when {
+                releaseKeystore != null -> signingConfigs.getByName("release")
+                // For personal test builds, so the APK installs straight onto a phone.
+                localProperties.getProperty("signing.useDebugKey") == "true" -> signingConfigs.getByName("debug")
+                else -> null
+            }
         }
     }
 
@@ -37,6 +61,12 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+    }
+
+    // Google's encrypted dependency report in the APK can't be audited, so F-Droid builds leave it out.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
     }
 }
 

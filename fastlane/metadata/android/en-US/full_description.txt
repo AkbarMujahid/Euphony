@@ -1,0 +1,27 @@
+Euphony FLAC Player is a clean, offline music player built for FLAC and hi-res lossless audio. It has no ads, no accounts and no tracking.
+
+<b>Hi-res audio</b>
+<ul>
+<li>Plays FLAC in 16-bit and 24-bit, up to 192 kHz</li>
+<li>24-bit audio is decoded to 32-bit float and handed to Android at its original sample rate, with no cut to 16-bit and no resampling inside the app</li>
+<li>Now Playing shows the real format, for example FLAC · 24-bit · 96 kHz</li>
+<li>Also plays WAV, MP3, AAC (M4A), Opus and Ogg Vorbis</li>
+</ul>
+
+After the app, Android mixes audio at the rate your hardware supports, so the final output depends on your device.
+
+<b>Your folder only</b>
+Pick your music folder once. Euphony reads that folder and its subfolders through Android's folder picker. It has no storage permission and no internet permission, so it can't see your other files and nothing leaves your phone.
+
+<b>Easy to use</b>
+<ul>
+<li>Each subfolder appears as a card with its cover art</li>
+<li>Tabs for Folders, Songs, Albums, Artists and Playlists, plus search</li>
+<li>Play and Shuffle on every folder, album, artist and playlist</li>
+<li>Mini player and a full Now Playing screen, with shuffle and repeat</li>
+<li>Reorderable queue, and playlists you can create, rename, reorder and delete</li>
+<li>10-band equalizer (31 Hz to 16 kHz, ±12 dB) with presets and a preamp</li>
+<li>Sleep timer from 15 to 90 minutes</li>
+<li>Background playback with notification, lock-screen and headset controls</li>
+<li>Open with Euphony from a file manager to play a single audio file</li>
+</ul>

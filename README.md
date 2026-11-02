@@ -88,7 +88,11 @@ gradlew.bat :app:assembleRelease
 gradlew.bat :app:testDebugUnitTest
 ```
 
-On macOS or Linux, use `./gradlew`. The APK is written to `app/build/outputs/apk/release/Euphony-release.apk`, minified with R8 and signed with your local debug key so it installs directly. To publish under your own key, replace `signingConfigs.getByName("debug")` in `app/build.gradle.kts`.
+On macOS or Linux, use `./gradlew`. The APK is written to `app/build/outputs/apk/release/` and minified with R8. Signing is set in `local.properties`, which git ignores:
+
+- **Your own key:** set `signing.storeFile`, `signing.storePassword`, `signing.keyAlias` and `signing.keyPassword`.
+- **Personal test builds:** set `signing.useDebugKey=true`, and the APK installs straight onto a phone.
+- **Neither:** you get an unsigned `Euphony-release-unsigned.apk`, which is how F-Droid builds the app.
 
 **Tech:** Kotlin, Jetpack Compose (Material 3), Media3 ExoPlayer with `MediaSessionService`, and the Storage Access Framework. The toolchain is AGP 9.4.1 with Kotlin 2.4.21.
 
