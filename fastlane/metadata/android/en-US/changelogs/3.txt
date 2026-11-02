@@ -1,0 +1,2 @@
+- Now signed with the developer's own release key
+- If you installed v1.0, this installs as a separate app, so your folder choice and playlists don't carry over

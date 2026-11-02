@@ -1,4 +1,2 @@
-First F-Droid release.
-
 - New package ID, so this installs as a separate app from earlier GitHub builds
 - Now licensed under the MIT License

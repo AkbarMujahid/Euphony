@@ -66,6 +66,8 @@ Euphony is built around lossless playback. It keeps your music at full quality a
 
 With a computer and USB debugging, you can also run `adb install Euphony-release.apk`.
 
+To get updates automatically, add `https://github.com/AkbarMujahid/Euphony` to [Obtainium](https://github.com/ImranR98/Obtainium), which installs new versions directly from GitHub releases.
+
 **Tips:**
 - Add songs by copying them into your folder. They appear the next time you open the app, or straight away with ⋮ → **Rescan folder**.
 - Switch folders with ⋮ → **Change folder**.
@@ -92,7 +94,7 @@ On macOS or Linux, use `./gradlew`. The APK is written to `app/build/outputs/apk
 
 - **Your own key:** set `signing.storeFile`, `signing.storePassword`, `signing.keyAlias` and `signing.keyPassword`.
 - **Personal test builds:** set `signing.useDebugKey=true`, and the APK installs straight onto a phone.
-- **Neither:** you get an unsigned `Euphony-release-unsigned.apk`, which is how F-Droid builds the app.
+- **Neither:** you get an unsigned `Euphony-release-unsigned.apk`.
 
 **Tech:** Kotlin, Jetpack Compose (Material 3), Media3 ExoPlayer with `MediaSessionService`, and the Storage Access Framework. The toolchain is AGP 9.4.1 with Kotlin 2.4.21.
 
