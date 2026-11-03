@@ -1,0 +1,8 @@
+- Resumes the queue and position after a restart
+- Favorites, plus Recently added, Recently played and Most played lists
+- ReplayGain (track or album)
+- Bit-perfect USB DAC output on Android 14+ (opt-in)
+- Equalizer remembered per output device
+- Fades on play/pause; optional crossfade (gapless stays default)
+- Sorting, and grid or list view for albums and folders
+- Dark, AMOLED black and Light themes; colours from album art

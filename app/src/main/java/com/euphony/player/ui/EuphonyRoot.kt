@@ -39,6 +39,10 @@ fun EuphonyRoot(vm: UiViewModel, folderName: String, onChangeFolder: () -> Unit,
     val playback by AppGraph.player.state.collectAsStateWithLifecycle()
     val equalizer by AppGraph.equalizer.state.collectAsStateWithLifecycle()
     val playlists by AppGraph.playlists.playlists.collectAsStateWithLifecycle()
+    val settings by AppGraph.settings.settings.collectAsStateWithLifecycle()
+    val usage by AppGraph.usage.usage.collectAsStateWithLifecycle()
+    val output by AppGraph.outputs.current.collectAsStateWithLifecycle()
+    val bitPerfect by AppGraph.bitPerfect.status.collectAsStateWithLifecycle()
 
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -58,6 +62,7 @@ fun EuphonyRoot(vm: UiViewModel, folderName: String, onChangeFolder: () -> Unit,
     CompositionLocalProvider(
         LocalMessenger provides messenger,
         LocalAddToPlaylist provides { ids -> vm.pendingPlaylistAdd = ids },
+        LocalFavorites provides usage.favorites.keys,
     ) {
         Box(Modifier.fillMaxSize().background(Background).windowInsetsPadding(WindowInsets.safeDrawing)) {
             Column(Modifier.fillMaxSize()) {
@@ -79,11 +84,12 @@ fun EuphonyRoot(vm: UiViewModel, folderName: String, onChangeFolder: () -> Unit,
                     saveableState.SaveableStateProvider(screen.toString()) {
                         val currentId = playback.currentTrack?.id
                         when (screen) {
-                            Screen.Library -> LibraryScreen(vm, library, playlists, currentId, listPadding, folderName, onChangeFolder, onRescan)
-                            is Screen.Collection -> CollectionScreen(vm, screen, library, playlists, currentId, listPadding)
+                            Screen.Library -> LibraryScreen(vm, library, playlists, usage, settings, currentId, listPadding, folderName, onChangeFolder, onRescan)
+                            is Screen.Collection -> CollectionScreen(vm, screen, library, playlists, usage, settings, currentId, listPadding)
                             Screen.NowPlaying -> NowPlayingScreen(vm, playback)
                             Screen.Queue -> QueueScreen(vm, playback, listPadding)
                             Screen.Equalizer -> EqualizerScreen(vm, equalizer, listPadding)
+                            Screen.Settings -> SettingsScreen(vm, settings, output, bitPerfect, listPadding)
                         }
                     }
                 }

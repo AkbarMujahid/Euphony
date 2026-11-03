@@ -37,17 +37,24 @@ Euphony is built around lossless playback. It keeps your music at full quality a
 - **Efficient.** FLAC is decoded by the phone's built-in decoder, which uses less battery than a bundled software decoder.
 - **Other formats too:** WAV, MP3, AAC (M4A), Opus and Ogg Vorbis.
 
-> **About your phone's output:** after the app, Android mixes audio at the rate your hardware supports. Many phones output 48 kHz through their speaker or headphone jack; hi-res-capable phones and USB DACs can output more. Euphony always delivers the full-resolution signal; the final step depends on the device.
+- **Bit-perfect USB output (Android 14+, opt-in):** with a USB DAC connected, Euphony can ask Android to pass the audio to the DAC untouched, with no resampling or mixing. The equalizer, ReplayGain, fades, crossfade and the phone's volume control are bypassed in this mode, so set the volume on the DAC.
+
+> **About your phone's output:** after the app, Android mixes audio at the rate your hardware supports. Many phones output 48 kHz through their speaker or headphone jack; hi-res-capable phones and USB DACs can output more. Euphony always delivers the full-resolution signal; the final step depends on the device, unless bit-perfect output is on.
 
 ## Easy to use
 
 - **Folders first.** Pick your music folder once. Each subfolder (English, Naat, Punjabi, Rap…) appears as a card with its cover art, so your library looks the way you organised it.
 - **One tap to play.** Every folder, album, artist and playlist has big **Play** and **Shuffle** buttons. Tap any song to start from there.
 - **Mini player** at the bottom of every list. Tap it for the full **Now playing** screen with large artwork, a seek bar, and shuffle and repeat.
-- **Long lists made simple:** search, plus tabs for Songs, Albums, Artists and Playlists.
-- **Song menu:** Play next, Add to queue, Add to playlist.
+- **Long lists made simple:** search, plus tabs for Songs, Albums, Artists and Playlists. Sort by name, date added or track number, and show albums and folders as a grid or a list.
+- **Song menu:** Play next, Add to queue, Add to playlist, Add to favorites.
 - **Queue** you can reorder, and **playlists** you can create, rename, reorder and delete.
-- **10-band equalizer** (31 Hz – 16 kHz, ±12 dB) with presets and a preamp.
+- **Favorites and automatic lists:** tap the heart on Now playing; Recently added, Recently played and Most played fill themselves from play counts kept on your phone.
+- **Picks up where you left off:** the queue, song and position come back after closing the app or restarting the phone.
+- **10-band equalizer** (31 Hz – 16 kHz, ±12 dB) with presets and a preamp, remembered separately for the speaker, wired headphones, each Bluetooth device and each USB DAC.
+- **ReplayGain** (track or album mode) evens out loudness from your files' tags, without clipping.
+- **Fades and crossfade:** a short fade on play and pause, and an optional 1–12 s crossfade. Gapless playback stays the default.
+- **Themes:** Dark, AMOLED black, Light or follow the system, with optional colours taken from the album art.
 - **Sleep timer** (15–90 minutes) with a live countdown.
 - **Controls everywhere:** notification, lock screen and headset buttons. Music keeps playing in the background.
 - **Open with Euphony** from any file manager to play a single audio file.
@@ -104,19 +111,24 @@ On macOS or Linux, use `./gradlew`. The APK is written to `app/build/outputs/apk
 app/src/main/java/com/euphony/player/
 ├── EuphonyApp.kt            Application; AppGraph holds the app-wide singletons
 ├── MainActivity.kt          Edge-to-edge host, folder picker, notification permission, "Open with" intents
-├── model/Contracts.kt       Shared data types and interfaces
+├── model/                   Shared data types and interfaces (Contracts.kt, Settings.kt)
 ├── data/
 │   ├── LibraryRepository.kt Walks the chosen folder (Storage Access Framework), reads tags, caches them
 │   ├── FolderScan.kt        Audio detection, stable ids, tag parsing
 │   ├── LibraryGrouping.kt   Builds albums / artists / folders from tracks
-│   └── PlaylistStore.kt     Playlists as JSON in app storage
+│   ├── Sorting.kt / SmartPlaylists.kt   Sort orders and the automatic lists
+│   ├── PlaylistStore.kt     Playlists as JSON in app storage
+│   └── SettingsStore.kt / UsageStore.kt  Settings, favorites and play counts
 ├── playback/
-│   ├── PlaybackService.kt   Media3 MediaSessionService + ExoPlayer (float output for hi-res), sleep timer
+│   ├── PlaybackService.kt   Media3 MediaSessionService + ExoPlayer (float output for hi-res), resume, sleep timer
 │   ├── PlayerConnection.kt  UI-side MediaController exposing playback state
-│   ├── EqualizerController.kt / EqMath.kt   10-band EQ
+│   ├── EqualizerController.kt / EqMath.kt   10-band EQ, per-device profiles
+│   ├── ReplayGain.kt        ReplayGain tag reading and gain maths
+│   ├── FadingPlayer.kt / Crossfader.kt / Fades.kt   Play/pause fades and crossfade
+│   ├── BitPerfect.kt / AudioOutputs.kt   USB DAC bit-perfect mode and output detection
 │   └── FormatLabel.kt       "FLAC · 24-bit · 192 kHz" labels
-└── ui/                      Compose screens: library, folders, now playing, queue, equalizer, dialogs
-app/src/test/                Unit tests (folder scan, grouping, playlists, EQ math, format labels)
+└── ui/                      Compose screens: library, folders, now playing, queue, equalizer, settings, themes
+app/src/test/                Unit tests (folder scan, grouping, playlists, sorting, smart lists, ReplayGain, resume, EQ, themes)
 docs/                        Logo and screenshots
 ```
 

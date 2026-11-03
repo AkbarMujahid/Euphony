@@ -51,9 +51,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.euphony.player.AppGraph
+import com.euphony.player.data.SmartPlaylists
+import com.euphony.player.data.Sorting
+import com.euphony.player.model.AppSettings
 import com.euphony.player.model.LibrarySnapshot
 import com.euphony.player.model.Playlist
+import com.euphony.player.model.SmartList
 import com.euphony.player.model.Track
+import com.euphony.player.model.TrackSort
+import com.euphony.player.model.Usage
 import com.euphony.player.ui.theme.Accent
 import com.euphony.player.ui.theme.SurfaceHigh
 import com.euphony.player.ui.theme.TextSecondary
@@ -68,10 +74,19 @@ private class CollectionInfo(
     val icon: ImageVector,
     val entries: List<Entry>,
     val playlist: Playlist?,
+    /** False for playlists and automatic lists, whose order is the point. */
+    val sortable: Boolean = true,
+    val emptyText: String = "No tracks.",
 )
 
-private fun resolve(screen: Screen.Collection, library: LibrarySnapshot, playlists: List<Playlist>): CollectionInfo? {
-    fun plain(ids: List<Long>) = library.resolve(ids).mapIndexed { i, t -> Entry(t, i) }
+private fun resolve(
+    screen: Screen.Collection,
+    library: LibrarySnapshot,
+    playlists: List<Playlist>,
+    usage: Usage,
+    sort: TrackSort,
+): CollectionInfo? {
+    fun plain(ids: List<Long>) = Sorting.tracks(library.resolve(ids), sort).mapIndexed { i, t -> Entry(t, i) }
     return when (screen.kind) {
         CollectionKind.Album -> library.albums.firstOrNull { it.id.toString() == screen.key }?.let { album ->
             val entries = plain(album.trackIds)
@@ -92,7 +107,24 @@ private fun resolve(screen: Screen.Collection, library: LibrarySnapshot, playlis
         CollectionKind.Playlist -> playlists.firstOrNull { it.id == screen.key }?.let { playlist ->
             // Keep each track's real playlist index: songs deleted from the device are skipped, not renumbered.
             val entries = playlist.trackIds.mapIndexedNotNull { i, id -> library.byId[id]?.let { Entry(it, i) } }
-            CollectionInfo(playlist.name, "Playlist · ${pluralTracks(entries.size)}", null, Icons.AutoMirrored.Rounded.PlaylistPlay, entries, playlist)
+            CollectionInfo(
+                playlist.name, "Playlist · ${pluralTracks(entries.size)}", null, Icons.AutoMirrored.Rounded.PlaylistPlay, entries, playlist,
+                sortable = false, emptyText = "This playlist is empty. Add songs from any song's menu.",
+            )
+        }
+        CollectionKind.Smart -> SmartList.entries.firstOrNull { it.name == screen.key }?.let { list ->
+            val entries = SmartPlaylists.select(list, library.tracks, usage).mapIndexed { i, t -> Entry(t, i) }
+            CollectionInfo(
+                list.title,
+                "Automatic · ${pluralTracks(entries.size)}",
+                null, smartListIcon(list), entries, null,
+                sortable = false,
+                emptyText = when (list) {
+                    SmartList.FAVORITES -> "No favorites yet. Tap the heart on the Now playing screen, or use a song's menu."
+                    SmartList.RECENTLY_ADDED -> "No songs yet."
+                    SmartList.RECENTLY_PLAYED, SmartList.MOST_PLAYED -> "Songs show up here once you've played them."
+                },
+            )
         }
     }
 }
@@ -103,10 +135,12 @@ fun CollectionScreen(
     screen: Screen.Collection,
     library: LibrarySnapshot,
     playlists: List<Playlist>,
+    usage: Usage,
+    settings: AppSettings,
     currentTrackId: Long?,
     contentPadding: PaddingValues,
 ) {
-    val info = resolve(screen, library, playlists)
+    val info = resolve(screen, library, playlists, usage, settings.collectionSort)
     if (info == null) {
         // The playlist was deleted or the files vanished; nothing left to show.
         if (!library.isLoading) LaunchedEffect(screen) { vm.back() }
@@ -124,6 +158,11 @@ fun CollectionScreen(
                 Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { vm.back() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
                     Spacer(Modifier.weight(1f))
+                    if (info.sortable) {
+                        SortButton(TrackSort.entries, settings.collectionSort, { it.label }) { picked ->
+                            AppGraph.settings.update { it.copy(collectionSort = picked) }
+                        }
+                    }
                     val actions = buildList {
                         add(MenuAction("Add all to queue", Icons.AutoMirrored.Rounded.QueueMusic) {
                             AppGraph.player.addToQueue(tracks)
@@ -189,7 +228,7 @@ fun CollectionScreen(
         if (info.entries.isEmpty()) {
             item(key = "empty") {
                 Text(
-                    if (info.playlist != null) "This playlist is empty. Add songs from any song's menu." else "No tracks.",
+                    info.emptyText,
                     color = TextSecondary,
                     modifier = Modifier.padding(20.dp),
                 )
@@ -221,7 +260,7 @@ fun CollectionScreen(
                 track = entry.track,
                 isCurrent = entry.track.id == currentTrackId,
                 onClick = { AppGraph.player.playTracks(tracks, info.entries.indexOf(entry)) },
-                leading = if (screen.kind == CollectionKind.Album) TrackLeading.Number else TrackLeading.Cover,
+                leading = if (screen.kind == CollectionKind.Album && settings.collectionSort == TrackSort.TRACK_NUMBER) TrackLeading.Number else TrackLeading.Cover,
                 extraActions = extra,
             )
         }

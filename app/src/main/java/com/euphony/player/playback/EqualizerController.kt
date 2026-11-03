@@ -8,6 +8,7 @@ import com.euphony.player.model.EQ_BAND_FREQUENCIES_HZ
 import com.euphony.player.model.EqPreset
 import com.euphony.player.model.EqualizerControl
 import com.euphony.player.model.EqualizerState
+import com.euphony.player.model.OutputDevice
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.update
  * 10-band equalizer applied to the player's audio session. Uses DynamicsProcessing, which allows
  * arbitrary band counts plus a limiter that keeps boosted bands from clipping. Falls back to the
  * framework Equalizer (usually 5 bands, mapped to the nearest of our 10) if that is unavailable.
+ * The same effect carries ReplayGain boosts, and settings can be kept per output device.
  */
 class EqualizerController(context: Context) : EqualizerControl {
 
@@ -29,6 +31,9 @@ class EqualizerController(context: Context) : EqualizerControl {
     private var sessionId = 0
     private var dynamics: DynamicsProcessing? = null
     private var fallback: Equalizer? = null
+
+    private var replayGainBoostDb = 0f
+    private var deviceKey: String? = prefs.getString(KEY_DEVICE, null)
 
     override fun setEnabled(enabled: Boolean) = change { it.copy(enabled = enabled) }
 
@@ -58,6 +63,45 @@ class EqualizerController(context: Context) : EqualizerControl {
         releaseEffects()
         sessionId = 0
     }
+
+    override fun setReplayGainBoost(gainDb: Float): Boolean {
+        if (gainDb != replayGainBoostDb) {
+            replayGainBoostDb = gainDb
+            applyToEffects()
+        }
+        return gainDb <= 0f || dynamics != null
+    }
+
+    override fun setBypassed(bypassed: Boolean) {
+        if (bypassed == _state.value.bypassed) return
+        _state.update { it.copy(bypassed = bypassed) }
+        applyToEffects()
+    }
+
+    override fun onOutputChanged(device: OutputDevice, perDevice: Boolean) {
+        if (!perDevice) {
+            _state.update { it.copy(deviceName = null) }
+            return
+        }
+        if (device.key == deviceKey) {
+            _state.update { it.copy(deviceName = device.name) }
+            return
+        }
+        val (profiles, next) = EqMath.switchProfile(loadProfiles(), deviceKey, _state.value, device.key)
+        deviceKey = device.key
+        prefs.edit().apply {
+            profiles.forEach { (key, profile) -> putString(PROFILE_PREFIX + key, EqMath.encodeProfile(profile)) }
+            putString(KEY_DEVICE, device.key)
+        }.apply()
+        _state.value = next.copy(deviceName = device.name)
+        saveState(_state.value)
+        applyToEffects()
+    }
+
+    private fun loadProfiles(): Map<String, EqualizerState> = prefs.all
+        .filterKeys { it.startsWith(PROFILE_PREFIX) }
+        .mapNotNull { (key, value) -> EqMath.decodeProfile(value as? String)?.let { key.removePrefix(PROFILE_PREFIX) to it } }
+        .toMap()
 
     private fun change(transform: (EqualizerState) -> EqualizerState) {
         _state.update(transform)
@@ -94,16 +138,18 @@ class EqualizerController(context: Context) : EqualizerControl {
 
     private fun applyToEffects() {
         val s = _state.value
+        val eqOn = s.enabled && !s.bypassed
+        val boost = if (s.bypassed) 0f else replayGainBoostDb
         dynamics?.let { dp ->
             runCatching {
                 val cutoffs = EqMath.bandCutoffsHz()
                 s.bandGainsDb.forEachIndexed { i, gain ->
-                    dp.setPreEqBandAllChannelsTo(i, DynamicsProcessing.EqBand(true, cutoffs[i], gain))
+                    dp.setPreEqBandAllChannelsTo(i, DynamicsProcessing.EqBand(true, cutoffs[i], if (eqOn) gain else 0f))
                 }
-                dp.setInputGainAllChannelsTo(s.preampDb)
+                dp.setInputGainAllChannelsTo((if (eqOn) s.preampDb else 0f) + boost)
                 // Fast brick-wall limiter just under 0 dBFS so boosts never clip.
                 dp.setLimiterAllChannelsTo(DynamicsProcessing.Limiter(true, true, 0, 1f, 60f, 10f, -1f, 0f))
-                dp.enabled = s.enabled
+                dp.enabled = eqOn || boost > 0f
             }.onFailure { Log.w(TAG, "Failed to apply DynamicsProcessing", it) }
         }
         fallback?.let { eq ->
@@ -115,7 +161,7 @@ class EqualizerController(context: Context) : EqualizerControl {
                     val mb = (gainDb * 100).toInt().coerceIn(minMb.toInt(), maxMb.toInt())
                     eq.setBandLevel(band.toShort(), mb.toShort())
                 }
-                eq.enabled = s.enabled
+                eq.enabled = eqOn
             }.onFailure { Log.w(TAG, "Failed to apply Equalizer", it) }
         }
     }
@@ -152,5 +198,7 @@ class EqualizerController(context: Context) : EqualizerControl {
         const val KEY_PREAMP = "preamp"
         const val KEY_GAINS = "gains"
         const val KEY_PRESET = "preset"
+        const val KEY_DEVICE = "device"
+        const val PROFILE_PREFIX = "profile:"
     }
 }

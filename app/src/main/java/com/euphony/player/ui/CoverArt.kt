@@ -25,12 +25,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.euphony.player.ui.theme.Accent
+import com.euphony.player.ui.theme.ArtAccent
 import com.euphony.player.ui.theme.SurfaceHigh
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -69,6 +71,28 @@ object CoverArtLoader {
         if (bitmap != null) cache.put(key, bitmap) else missing.put(key, true)
         return bitmap
     }
+
+    // Accent colours picked from covers, keyed like the bitmaps plus the theme brightness.
+    private val accents = object : LruCache<String, Int>(64) {}
+
+    /** A readable accent colour from [uri]'s cover (ARGB), or null when it has no art or no clear colour. */
+    suspend fun accent(resolver: ContentResolver, uri: String, light: Boolean): Int? {
+        val key = "$light|$uri"
+        accents.get(key)?.let { return it.takeIf { c -> c != NO_ACCENT } }
+        val bitmap = load(resolver, uri, SMALL_PX) ?: return null
+        val picked = withContext(Dispatchers.Default) {
+            val small = Bitmap.createScaledBitmap(bitmap, ACCENT_SAMPLE_PX, ACCENT_SAMPLE_PX, true)
+            val pixels = IntArray(ACCENT_SAMPLE_PX * ACCENT_SAMPLE_PX)
+            small.getPixels(pixels, 0, ACCENT_SAMPLE_PX, 0, 0, ACCENT_SAMPLE_PX, ACCENT_SAMPLE_PX)
+            if (small !== bitmap) small.recycle()
+            ArtAccent.pick(pixels, light)
+        }
+        accents.put(key, picked ?: NO_ACCENT)
+        return picked
+    }
+
+    private const val ACCENT_SAMPLE_PX = 32
+    private const val NO_ACCENT = 0
 
     private fun embeddedPicture(resolver: ContentResolver, uri: Uri, px: Int): Bitmap? {
         val bytes = resolver.openFileDescriptor(uri, "r")?.use { pfd ->
@@ -132,4 +156,15 @@ fun CoverArt(
             )
         }
     }
+}
+
+/** The accent colour for [uri]'s cover, or null to keep the theme's own (also while it's loading). */
+@Composable
+fun rememberArtAccent(uri: String?, light: Boolean): Color? {
+    val resolver = LocalContext.current.contentResolver
+    val state = remember { mutableStateOf<Color?>(null) }
+    LaunchedEffect(uri, light) {
+        state.value = uri?.let { CoverArtLoader.accent(resolver, it, light) }?.let(::Color)
+    }
+    return state.value
 }

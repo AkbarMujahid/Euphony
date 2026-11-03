@@ -8,7 +8,8 @@ import androidx.lifecycle.ViewModel
 
 enum class LibraryTab(val label: String) { Folders("Folders"), Songs("Songs"), Albums("Albums"), Artists("Artists"), Playlists("Playlists") }
 
-enum class CollectionKind { Album, Artist, Folder, Playlist }
+/** [Smart] is one of the automatic lists (favorites, recently played…); its key is the list's name. */
+enum class CollectionKind { Album, Artist, Folder, Playlist, Smart }
 
 sealed interface Screen {
     data object Library : Screen
@@ -17,6 +18,7 @@ sealed interface Screen {
     data object NowPlaying : Screen
     data object Queue : Screen
     data object Equalizer : Screen
+    data object Settings : Screen
 }
 
 /** UI-only state that should survive rotation: the back stack, the library tab and the search text. */

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridScope
@@ -38,6 +39,7 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SearchOff
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
@@ -68,7 +70,15 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.euphony.player.AppGraph
+import com.euphony.player.data.SmartPlaylists
+import com.euphony.player.data.Sorting
 import com.euphony.player.model.Album
+import com.euphony.player.model.AppSettings
+import com.euphony.player.model.GroupSort
+import com.euphony.player.model.LayoutMode
+import com.euphony.player.model.SmartList
+import com.euphony.player.model.TrackSort
+import com.euphony.player.model.Usage
 import com.euphony.player.model.Artist
 import com.euphony.player.model.Folder
 import com.euphony.player.model.LibrarySnapshot
@@ -84,6 +94,8 @@ fun LibraryScreen(
     vm: UiViewModel,
     library: LibrarySnapshot,
     playlists: List<Playlist>,
+    usage: Usage,
+    settings: AppSettings,
     currentTrackId: Long?,
     contentPadding: PaddingValues,
     folderName: String,
@@ -140,11 +152,11 @@ fun LibraryScreen(
                     TextButton(onClick = onChangeFolder) { Text("Choose another folder") }
                 }
                 else -> when (vm.tab) {
-                    LibraryTab.Songs -> SongsTab(vm, library.tracks.filter { it.matches(q) }, currentTrackId, contentPadding)
-                    LibraryTab.Albums -> AlbumsTab(vm, library.albums.filter { it.matches(q) }, contentPadding)
+                    LibraryTab.Songs -> SongsTab(vm, library.tracks.filter { it.matches(q) }, settings.songSort, currentTrackId, contentPadding)
+                    LibraryTab.Albums -> AlbumsTab(vm, library, library.albums.filter { it.matches(q) }, settings, contentPadding)
                     LibraryTab.Artists -> ArtistsTab(vm, library.artists.filter { it.name.contains(q, true) }, contentPadding)
-                    LibraryTab.Folders -> FoldersTab(vm, library, library.folders.filter { it.path.contains(q, true) }, contentPadding)
-                    LibraryTab.Playlists -> PlaylistsTab(vm, playlists.filter { it.name.contains(q, true) }, contentPadding)
+                    LibraryTab.Folders -> FoldersTab(vm, library, library.folders.filter { it.path.contains(q, true) }, settings, contentPadding)
+                    LibraryTab.Playlists -> PlaylistsTab(vm, library, usage, playlists.filter { it.name.contains(q, true) }, contentPadding)
                 }
             }
         }
@@ -207,6 +219,7 @@ private fun LibraryTopBar(
                 listOf(
                     MenuAction("Rescan folder", Icons.Rounded.Refresh, onRescan),
                     MenuAction("Change folder", Icons.Rounded.FolderOpen, onChangeFolder),
+                    MenuAction("Settings", Icons.Rounded.Settings) { vm.open(Screen.Settings) },
                 ),
                 contentDescription = "Library options",
             )
@@ -233,15 +246,18 @@ private fun NoMatches(vm: UiViewModel) =
     EmptyState(Icons.Rounded.SearchOff, "Nothing matches \"${vm.query.trim()}\"")
 
 @Composable
-private fun SongsTab(vm: UiViewModel, tracks: List<Track>, currentTrackId: Long?, contentPadding: PaddingValues) {
-    if (tracks.isEmpty()) return NoMatches(vm)
+private fun SongsTab(vm: UiViewModel, unsorted: List<Track>, sort: TrackSort, currentTrackId: Long?, contentPadding: PaddingValues) {
+    if (unsorted.isEmpty()) return NoMatches(vm)
+    val tracks = remember(unsorted, sort) { Sorting.tracks(unsorted, sort) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
         item(key = "header") {
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(pluralTracks(tracks.size), color = TextSecondary, modifier = Modifier.weight(1f))
+                SortButton(TrackSort.entries, sort, { it.label }) { picked -> AppGraph.settings.update { it.copy(songSort = picked) } }
+                Spacer(Modifier.width(4.dp))
                 FilledTonalButton(onClick = { AppGraph.player.playTracks(tracks, shuffle = true) }) {
                     Icon(Icons.Rounded.Shuffle, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
@@ -260,34 +276,80 @@ private fun SongsTab(vm: UiViewModel, tracks: List<Track>, currentTrackId: Long?
 }
 
 @Composable
-private fun AlbumsTab(vm: UiViewModel, albums: List<Album>, contentPadding: PaddingValues) {
-    if (albums.isEmpty()) return NoMatches(vm)
-    CoverGrid(contentPadding) {
-        items(albums, key = { it.id }) { album ->
-            CoverCard(
-                coverUri = album.coverTrackUri,
-                title = album.title,
-                subtitle = album.artist,
-                onClick = { vm.open(Screen.Collection(CollectionKind.Album, album.id.toString())) },
-            )
+private fun AlbumsTab(vm: UiViewModel, library: LibrarySnapshot, unsorted: List<Album>, settings: AppSettings, contentPadding: PaddingValues) {
+    if (unsorted.isEmpty()) return NoMatches(vm)
+    val albums = remember(unsorted, settings.albumSort, library) {
+        Sorting.albums(unsorted, settings.albumSort) { Sorting.newestOf(it.trackIds, library.byId) }
+    }
+    val header: @Composable (Modifier) -> Unit = { modifier ->
+        GroupHeader(
+            if (albums.size == 1) "1 album" else "${albums.size} albums",
+            settings.albumSort, { picked -> AppGraph.settings.update { it.copy(albumSort = picked) } },
+            settings.albumLayout, { layout -> AppGraph.settings.update { it.copy(albumLayout = layout) } },
+            modifier,
+        )
+    }
+    val open = { album: Album -> vm.open(Screen.Collection(CollectionKind.Album, album.id.toString())) }
+    if (settings.albumLayout == LayoutMode.GRID) {
+        CoverGrid(contentPadding, header) {
+            items(albums, key = { it.id }) { album ->
+                CoverCard(coverUri = album.coverTrackUri, title = album.title, subtitle = album.artist, onClick = { open(album) })
+            }
+        }
+    } else {
+        CoverList(contentPadding, header) {
+            items(albums, key = { it.id }) { album ->
+                ListRow(
+                    title = album.title,
+                    subtitle = "${album.artist} · ${pluralTracks(album.trackIds.size)}",
+                    onClick = { open(album) },
+                    leading = { CoverArt(album.coverTrackUri, Modifier.size(48.dp), corner = 6.dp) },
+                )
+            }
         }
     }
 }
 
+/** Count, sort order and grid/list switch above the album and folder lists. */
 @Composable
-private fun CoverGrid(contentPadding: PaddingValues, content: LazyGridScope.() -> Unit) {
+private fun GroupHeader(
+    count: String,
+    sort: GroupSort,
+    onSort: (GroupSort) -> Unit,
+    layout: LayoutMode,
+    onLayout: (LayoutMode) -> Unit,
+    modifier: Modifier,
+) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(count, color = TextSecondary, modifier = Modifier.weight(1f))
+        SortButton(GroupSort.entries, sort, { it.label }, onSort)
+        LayoutToggle(layout, onLayout)
+    }
+}
+
+@Composable
+private fun CoverList(contentPadding: PaddingValues, header: @Composable (Modifier) -> Unit, content: LazyListScope.() -> Unit) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
+        item(key = "header") { header(Modifier.padding(start = 16.dp, end = 4.dp)) }
+        content()
+    }
+}
+
+@Composable
+private fun CoverGrid(contentPadding: PaddingValues, header: @Composable (Modifier) -> Unit, content: LazyGridScope.() -> Unit) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(150.dp),
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
             start = 12.dp,
             end = 12.dp,
-            top = 12.dp,
+            top = 0.dp,
             bottom = contentPadding.calculateBottomPadding() + 12.dp,
         ),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        item(key = "header", span = { GridItemSpan(maxLineSpan) }) { header(Modifier.padding(start = 4.dp)) }
         content()
         item(span = { GridItemSpan(maxLineSpan) }) { Spacer(Modifier.height(4.dp)) }
     }
@@ -324,31 +386,68 @@ private fun ArtistsTab(vm: UiViewModel, artists: List<Artist>, contentPadding: P
 }
 
 @Composable
-private fun FoldersTab(vm: UiViewModel, library: LibrarySnapshot, folders: List<Folder>, contentPadding: PaddingValues) {
-    if (folders.isEmpty()) return NoMatches(vm)
-    CoverGrid(contentPadding) {
-        items(folders, key = { it.path }) { folder ->
-            // Nested folders also show where they sit, e.g. "Punjabi · 12 tracks" for Music/Punjabi/Karan Aujla.
-            val parents = folder.path.trimEnd('/').split('/').drop(1).dropLast(1)
-            val count = pluralTracks(folder.trackIds.size)
-            CoverCard(
-                coverUri = folder.trackIds.firstNotNullOfOrNull { library.byId[it]?.uri },
-                title = folder.name,
-                subtitle = if (parents.isEmpty()) count else parents.joinToString(" / ") + " · " + count,
-                onClick = { vm.open(Screen.Collection(CollectionKind.Folder, folder.path)) },
-            )
+private fun FoldersTab(vm: UiViewModel, library: LibrarySnapshot, unsorted: List<Folder>, settings: AppSettings, contentPadding: PaddingValues) {
+    if (unsorted.isEmpty()) return NoMatches(vm)
+    val folders = remember(unsorted, settings.folderSort, library) {
+        Sorting.folders(unsorted, settings.folderSort) { Sorting.newestOf(it.trackIds, library.byId) }
+    }
+    val header: @Composable (Modifier) -> Unit = { modifier ->
+        GroupHeader(
+            if (folders.size == 1) "1 folder" else "${folders.size} folders",
+            settings.folderSort, { picked -> AppGraph.settings.update { it.copy(folderSort = picked) } },
+            settings.folderLayout, { layout -> AppGraph.settings.update { it.copy(folderLayout = layout) } },
+            modifier,
+        )
+    }
+    // Nested folders also show where they sit, e.g. "Punjabi · 12 tracks" for Music/Punjabi/Karan Aujla.
+    fun subtitle(folder: Folder): String {
+        val parents = folder.path.trimEnd('/').split('/').drop(1).dropLast(1)
+        val count = pluralTracks(folder.trackIds.size)
+        return if (parents.isEmpty()) count else parents.joinToString(" / ") + " · " + count
+    }
+    fun cover(folder: Folder) = folder.trackIds.firstNotNullOfOrNull { library.byId[it]?.uri }
+    val open = { folder: Folder -> vm.open(Screen.Collection(CollectionKind.Folder, folder.path)) }
+    if (settings.folderLayout == LayoutMode.GRID) {
+        CoverGrid(contentPadding, header) {
+            items(folders, key = { it.path }) { folder ->
+                CoverCard(coverUri = cover(folder), title = folder.name, subtitle = subtitle(folder), onClick = { open(folder) })
+            }
+        }
+    } else {
+        CoverList(contentPadding, header) {
+            items(folders, key = { it.path }) { folder ->
+                ListRow(
+                    title = folder.name,
+                    subtitle = subtitle(folder),
+                    onClick = { open(folder) },
+                    leading = { CoverArt(cover(folder), Modifier.size(48.dp), corner = 6.dp) },
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun PlaylistsTab(vm: UiViewModel, playlists: List<Playlist>, contentPadding: PaddingValues) {
+private fun PlaylistsTab(vm: UiViewModel, library: LibrarySnapshot, usage: Usage, playlists: List<Playlist>, contentPadding: PaddingValues) {
     var creating by remember { mutableStateOf(false) }
+    val q = vm.query.trim()
+    val smart = remember(library.tracks, usage, q) {
+        SmartList.entries.filter { it.title.contains(q, true) }
+            .map { it to SmartPlaylists.select(it, library.tracks, usage).size }
+    }
     var renaming by remember { mutableStateOf<Playlist?>(null) }
     var deleting by remember { mutableStateOf<Playlist?>(null) }
     val message = LocalMessenger.current
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
+        items(smart, key = { "smart:${it.first}" }) { (list, count) ->
+            ListRow(
+                title = list.title,
+                subtitle = pluralTracks(count),
+                onClick = { vm.open(Screen.Collection(CollectionKind.Smart, list.name)) },
+                leading = { IconTile(smartListIcon(list), tint = Accent) },
+            )
+        }
         item(key = "new") {
             ListRow(
                 title = "New playlist",

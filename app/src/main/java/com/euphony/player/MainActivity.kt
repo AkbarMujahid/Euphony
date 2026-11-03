@@ -16,16 +16,23 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.euphony.player.ui.EuphonyRoot
 import com.euphony.player.ui.FolderSetupScreen
 import com.euphony.player.ui.Screen
+import com.euphony.player.model.ThemeMode
 import com.euphony.player.ui.UiViewModel
+import com.euphony.player.ui.rememberArtAccent
 import com.euphony.player.ui.theme.Background
+import com.euphony.player.ui.theme.BlackColors
+import com.euphony.player.ui.theme.DarkColors
 import com.euphony.player.ui.theme.EuphonyTheme
+import com.euphony.player.ui.theme.LightColors
 import com.euphony.player.ui.theme.TextPrimary
 import kotlinx.coroutines.launch
 
@@ -47,11 +54,8 @@ class MainActivity : ComponentActivity() {
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // The app is always dark, so system bar icons stay light whatever the system theme.
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-        )
+        // Start with light system bar icons to match the dark launch background; the chosen theme updates them.
+        setSystemBars(light = false)
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) {
             // Needed for the playback notification and its lock-screen controls.
@@ -63,7 +67,18 @@ class MainActivity : ComponentActivity() {
             handleIntent(intent)
         }
         setContent {
-            EuphonyTheme {
+            val settings by AppGraph.settings.settings.collectAsStateWithLifecycle()
+            val systemDark = isSystemInDarkTheme()
+            val base = when (settings.theme) {
+                ThemeMode.DARK -> DarkColors
+                ThemeMode.BLACK -> BlackColors
+                ThemeMode.LIGHT -> LightColors
+                ThemeMode.SYSTEM -> if (systemDark) DarkColors else LightColors
+            }
+            val playback by AppGraph.player.state.collectAsStateWithLifecycle()
+            val artAccent = rememberArtAccent(playback.currentTrack?.uri?.takeIf { settings.albumArtAccent }, base.isLight)
+            LaunchedEffect(base.isLight) { setSystemBars(base.isLight) }
+            EuphonyTheme(base, artAccent) {
                 Surface(color = Background, contentColor = TextPrimary) {
                     val folder by AppGraph.library.folder.collectAsStateWithLifecycle()
                     val current = folder
@@ -101,6 +116,16 @@ class MainActivity : ComponentActivity() {
         val uri = intent.data ?: return
         AppGraph.player.playUri(uri.toString())
         vm.open(Screen.NowPlaying)
+    }
+
+    /** Dark icons on a light theme, light icons on a dark one. */
+    private fun setSystemBars(light: Boolean) {
+        val style = if (light) {
+            SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+        } else {
+            SystemBarStyle.dark(Color.TRANSPARENT)
+        }
+        enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
     }
 
     private fun chooseFolder() {

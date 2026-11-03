@@ -81,6 +81,17 @@ fun EqualizerScreen(vm: UiViewModel, state: EqualizerState, contentPadding: Padd
             )
         }
 
+        if (state.deviceName != null) {
+            Text(
+                "Settings for ${state.deviceName}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextSecondary,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp),
+            )
+        }
+        if (state.bypassed) {
+            InfoNotice("Bit-perfect output is on, so the equalizer is bypassed. Turn it off in Settings to use the equalizer.")
+        }
         if (!state.supported) {
             Row(
                 Modifier
@@ -186,6 +197,11 @@ private fun formatDb(db: Float) = "%+.1f dB".format(db)
 private fun VerticalGainSlider(value: Float, onValueChange: (Float) -> Unit, label: String, modifier: Modifier = Modifier) {
     val range = EQ_MAX_DB - EQ_MIN_DB
     val onChange by rememberUpdatedState(onValueChange)
+    // Theme colours are read here: drawing below runs outside composition.
+    val trackColor = SurfaceHigh
+    val tickColor = TextSecondary.copy(alpha = 0.4f)
+    val accent = Accent
+    val holeColor = Surface
     // Same geometry as the drawing below: the track is inset by the thumb radius at both ends.
     fun valueAt(y: Float, height: Float, inset: Float): Float {
         val fraction = 1f - ((y - inset) / (height - 2 * inset)).coerceIn(0f, 1f)
@@ -222,19 +238,36 @@ private fun VerticalGainSlider(value: Float, onValueChange: (Float) -> Unit, lab
         val valueY = yFor(value)
 
         drawRoundRect(
-            color = SurfaceHigh,
+            color = trackColor,
             topLeft = Offset(cx - trackWidth / 2, top),
             size = Size(trackWidth, usable),
             cornerRadius = CornerRadius(trackWidth / 2),
         )
-        drawLine(TextSecondary.copy(alpha = 0.4f), Offset(cx - 8.dp.toPx(), zeroY), Offset(cx + 8.dp.toPx(), zeroY), strokeWidth = 1.dp.toPx())
+        drawLine(tickColor, Offset(cx - 8.dp.toPx(), zeroY), Offset(cx + 8.dp.toPx(), zeroY), strokeWidth = 1.dp.toPx())
         drawRoundRect(
-            color = Accent,
+            color = accent,
             topLeft = Offset(cx - trackWidth / 2, minOf(zeroY, valueY)),
             size = Size(trackWidth, kotlin.math.abs(zeroY - valueY)),
             cornerRadius = CornerRadius(trackWidth / 2),
         )
-        drawCircle(Accent, radius = thumbRadius, center = Offset(cx, valueY))
-        drawCircle(Surface, radius = thumbRadius * 0.4f, center = Offset(cx, valueY))
+        drawCircle(accent, radius = thumbRadius, center = Offset(cx, valueY))
+        drawCircle(holeColor, radius = thumbRadius * 0.4f, center = Offset(cx, valueY))
+    }
+}
+
+@Composable
+private fun InfoNotice(text: String) {
+    Row(
+        Modifier
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(SurfaceHigh)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.Info, contentDescription = null, tint = Accent)
+        Spacer(Modifier.width(12.dp))
+        Text(text, style = MaterialTheme.typography.bodyMedium)
     }
 }

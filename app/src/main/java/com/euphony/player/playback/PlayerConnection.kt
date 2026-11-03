@@ -234,7 +234,8 @@ class PlayerConnection(private val context: Context) : PlayerController {
         val index = c.currentMediaItemIndex.takeIf { it in queue.indices } ?: -1
         val current = queue.getOrNull(index)
         val duration = c.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: current?.durationMs ?: 0L
-        val sleepEndsAt = c.sessionExtras.getLong(PlaybackCommands.EXTRA_SLEEP_ENDS_AT, 0L)
+        val extras = c.sessionExtras
+        val sleepEndsAt = extras.getLong(PlaybackCommands.EXTRA_SLEEP_ENDS_AT, 0L)
         _state.value = PlaybackUiState(
             currentTrack = current,
             isPlaying = c.isPlaying,
@@ -250,6 +251,8 @@ class PlayerConnection(private val context: Context) : PlayerController {
             currentIndex = index,
             formatLabel = currentFormatLabel(c),
             sleepTimerEndsAtMs = sleepEndsAt.takeIf { it > System.currentTimeMillis() },
+            replayGainDb = if (extras.containsKey(PlaybackCommands.EXTRA_REPLAY_GAIN_DB)) extras.getFloat(PlaybackCommands.EXTRA_REPLAY_GAIN_DB) else null,
+            bitPerfect = extras.getBoolean(PlaybackCommands.EXTRA_BIT_PERFECT, false),
         )
     }
 

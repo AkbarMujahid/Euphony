@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.SkipNext
@@ -27,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +47,9 @@ import com.euphony.player.ui.theme.TextSecondary
 
 /** Opens the "Add to playlist" picker for the given track ids. */
 val LocalAddToPlaylist = staticCompositionLocalOf<(List<Long>) -> Unit> { {} }
+
+/** Ids of the favorite tracks, for hearts and menu labels. */
+val LocalFavorites = compositionLocalOf<Set<Long>> { emptySet() }
 
 class MenuAction(val label: String, val icon: ImageVector, val onClick: () -> Unit)
 
@@ -112,6 +118,7 @@ fun TrackRow(
 fun TrackMenuButton(track: Track, extraActions: List<MenuAction> = emptyList()) {
     val message = LocalMessenger.current
     val addToPlaylist = LocalAddToPlaylist.current
+    val favorites = LocalFavorites.current
     val actions = buildList {
         add(MenuAction("Play next", Icons.Rounded.SkipNext) {
             AppGraph.player.playNext(listOf(track))
@@ -123,6 +130,17 @@ fun TrackMenuButton(track: Track, extraActions: List<MenuAction> = emptyList()) 
         })
         if (track.id >= 0) {
             add(MenuAction("Add to playlist…", Icons.AutoMirrored.Rounded.PlaylistAdd) { addToPlaylist(listOf(track.id)) })
+            if (track.id in favorites) {
+                add(MenuAction("Remove from favorites", Icons.Rounded.Favorite) {
+                    AppGraph.usage.toggleFavorite(track.id)
+                    message("Removed from favorites")
+                })
+            } else {
+                add(MenuAction("Add to favorites", Icons.Rounded.FavoriteBorder) {
+                    AppGraph.usage.toggleFavorite(track.id)
+                    message("Added to favorites")
+                })
+            }
         }
         addAll(extraActions)
     }

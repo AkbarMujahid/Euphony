@@ -25,6 +25,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Equalizer
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -66,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import com.euphony.player.AppGraph
 import com.euphony.player.model.PlaybackUiState
 import com.euphony.player.model.RepeatMode
+import com.euphony.player.playback.ReplayGain
 import com.euphony.player.ui.theme.Accent
 import com.euphony.player.ui.theme.Background
 import com.euphony.player.ui.theme.Surface
@@ -101,7 +104,14 @@ fun NowPlayingScreen(vm: UiViewModel, state: PlaybackUiState) {
                 textAlign = TextAlign.Center,
                 modifier = Modifier.weight(1f),
             )
-            Spacer(Modifier.width(48.dp))
+            val favorite = track != null && track.id in LocalFavorites.current
+            IconButton(onClick = { track?.let { AppGraph.usage.toggleFavorite(it.id) } }, enabled = track != null && track.id >= 0) {
+                Icon(
+                    if (favorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                    contentDescription = if (favorite) "Remove from favorites" else "Add to favorites",
+                    tint = if (favorite) Accent else TextSecondary,
+                )
+            }
         }
         Spacer(Modifier.height(12.dp))
         BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -132,10 +142,16 @@ fun NowPlayingScreen(vm: UiViewModel, state: PlaybackUiState) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.fillMaxWidth(),
         )
-        state.formatLabel?.let { label ->
+        val details = listOfNotNull(
+            state.formatLabel,
+            state.replayGainDb?.let { "ReplayGain ${ReplayGain.label(it)}" },
+            "Bit-perfect".takeIf { state.bitPerfect },
+        )
+        if (details.isNotEmpty()) {
             Spacer(Modifier.height(12.dp))
             Text(
-                label,
+                details.joinToString(" · "),
+                textAlign = TextAlign.Center,
                 style = MaterialTheme.typography.labelMedium,
                 color = Accent,
                 modifier = Modifier

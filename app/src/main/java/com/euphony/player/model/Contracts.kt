@@ -83,6 +83,10 @@ data class PlaybackUiState(
     val formatLabel: String? = null,
     /** Wall-clock time (System.currentTimeMillis) when the sleep timer pauses playback, or null. */
     val sleepTimerEndsAtMs: Long? = null,
+    /** ReplayGain applied to the current song in dB, or null when ReplayGain is off or the song has no tags. */
+    val replayGainDb: Float? = null,
+    /** True while the audio goes to a USB DAC unchanged. */
+    val bitPerfect: Boolean = false,
 )
 
 /** The one folder the person gave the app access to; [uri] is a Storage Access Framework tree uri. */
@@ -148,6 +152,10 @@ data class EqualizerState(
     val presetName: String = "Flat",
     /** True when the device exposes the effect; false means controls are shown but inert. */
     val supported: Boolean = true,
+    /** The output these settings belong to, when settings are kept per device. */
+    val deviceName: String? = null,
+    /** True while bit-perfect output skips all effects. */
+    val bypassed: Boolean = false,
 )
 
 val EQ_BAND_FREQUENCIES_HZ = listOf(31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000)
@@ -165,4 +173,13 @@ interface EqualizerControl {
     /** Called by the playback service whenever the player's audio session id changes. */
     fun attachToSession(audioSessionId: Int)
     fun release()
+
+    /** Extra gain from ReplayGain, applied in front of the limiter. False if the device can't boost. */
+    fun setReplayGainBoost(gainDb: Float): Boolean
+
+    /** Bit-perfect output: no effects at all while true. */
+    fun setBypassed(bypassed: Boolean)
+
+    /** With [perDevice], each output keeps its own settings; without, one set is shared. */
+    fun onOutputChanged(device: OutputDevice, perDevice: Boolean)
 }
